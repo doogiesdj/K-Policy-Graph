@@ -115,6 +115,26 @@ details[open] summary::before{transform:rotate(90deg)}
 .param-table .val-a{color:#2563eb;font-weight:700;font-family:monospace}
 .param-table .val-b{color:#dc2626;font-weight:700;font-family:monospace}
 .param-table .result-row td{background:#f0fdf4;font-weight:700;border-top:2px solid #86efac}
+/* ═══ 추정 계산기 ═══ */
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.calc-grid{grid-template-columns:1fr}}
+.mini-calc{background:#fff;border-radius:10px;padding:16px;border:1px solid #e2e8f0}
+.mini-calc h5{font-size:.84rem;font-weight:800;color:#1e3a5f;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9}
+.mc-formula{font-family:'Courier New',monospace;font-size:.8rem;background:#f8fafc;padding:8px 12px;border-radius:7px;margin-bottom:12px;color:#374151;line-height:1.6;border:1px solid #e2e8f0}
+.mc-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mc-row label{font-size:.76rem;font-weight:600;color:#6b7280;width:148px;flex-shrink:0;line-height:1.3}
+.mc-row input[type=number]{flex:1;border:1.5px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:.88rem;outline:none;min-width:0;transition:border-color .15s}
+.mc-row input[type=number]:focus{border-color:#3b82f6}
+.mc-divider{border:none;border-top:1px solid #f1f5f9;margin:10px 0}
+.mc-result{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin:10px 0;display:flex;align-items:center;justify-content:space-between}
+.mc-result .mr-label{font-size:.75rem;color:#374151}
+.mc-result .mr-val{font-size:1.05rem;font-weight:800;color:#059669;font-family:'Courier New',monospace}
+.mc-apply{display:flex;gap:8px;margin-top:2px}
+.abn-a{background:#eff6ff;border:1.5px solid #3b82f6;color:#2563eb;border-radius:7px;padding:6px 11px;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;flex:1}
+.abn-a:hover{background:#dbeafe}
+.abn-b{background:#fef2f2;border:1.5px solid #ef4444;color:#dc2626;border-radius:7px;padding:6px 11px;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;flex:1}
+.abn-b:hover{background:#fee2e2}
+.mc-note{font-size:.72rem;color:#9ca3af;margin-top:4px;line-height:1.4}
 /* 상황 설명 텍스트에어리어 */
 .situation-area{width:100%;border:2px solid #e5e7eb;border-radius:9px;padding:12px 14px;font-size:.93rem;font-family:inherit;color:#1f2937;resize:vertical;min-height:90px;outline:none;transition:border-color .2s;line-height:1.6}
 .situation-area:focus{border-color:#3b82f6}
@@ -175,55 +195,88 @@ details[open] summary::before{transform:rotate(90deg)}
   <div class="field"><div id="trSel" class="csel"></div><div class="fd" id="trDesc">나눌 총 예산 금액을 선택하세요</div></div>
 </div>
 
-<!-- 3. 입력값 추정 가이드 -->
+<!-- 3. 입력값 추정 계산기 -->
 <details class="guide-details">
-  <summary>📋 입력값을 어떻게 정해야 할지 모르겠다면 — 국조실 실무 추정 가이드</summary>
+  <summary>📋 입력값을 어떻게 정해야 할지 모르겠다면 — 파라미터 추정 계산기</summary>
   <div class="guide-body">
     <p style="font-size:.82rem;color:#374151;margin-bottom:16px;line-height:1.6">
-      국무조정실이 두 부처의 정확한 내부 상황을 알기 어려운 경우, 아래 공개 자료와 추정 방법을 활용하세요.<br>
-      정확한 수치보다 <strong>상대적 크기 관계</strong>(A가 B보다 강한지, 피해가 큰지)가 결과에 더 중요합니다.
+      수치를 입력하면 파라미터가 자동으로 계산됩니다. 계산 후 <strong>기관에 적용</strong> 버튼을 누르면 위 입력창에 자동으로 반영됩니다.<br>
+      정확한 수치보다 <strong>두 기관 간 상대적 크기 관계</strong>(A가 B보다 큰지, 작은지)가 결과에 더 중요합니다.
     </p>
-    <div class="guide-grid">
-      <div class="guide-item">
-        <h5>📌 현재 배분액 (준거점 x₀) — "지금 갖고 있는 것"</h5>
-        <ul>
-          <li>예산: 기획재정부 <strong>예산 개요서</strong> 또는 <strong>세출예산 사업별 설명서</strong></li>
-          <li>관할권·권한: <strong>정부조직법 시행령</strong> 소관 업무 조항 비율</li>
-          <li>인력: <strong>행정안전부 정원령</strong> 기준 현재 정원표</li>
-          <li>규제: <strong>규제정보포털</strong>(better.go.kr) 소관 규제 건수 비율</li>
-        </ul>
-        <div class="g-default">데이터 없을 때: 총 자원의 50%를 기본값으로 설정</div>
+    <div class="calc-grid">
+
+      <!-- ① 준거점 x₀ -->
+      <div class="mini-calc">
+        <h5>① 현재 배분액 — 준거점 x₀</h5>
+        <div class="mc-formula">x₀ = (기관 실적 ÷ 전체 기준량) × 총 자원(B)<br><span style="color:#9ca3af;font-size:.76rem">참조: 예산 개요서 / 정원령 / 규제정보포털</span></div>
+        <div class="mc-row"><label>기관 현재 실적</label><input type="number" id="gc_a1" oninput="calcX0()" placeholder="예: 450억, 90명…"></div>
+        <div class="mc-row"><label>전체 기준량 합계</label><input type="number" id="gc_t1" oninput="calcX0()" placeholder="예: 1,000억, 200명…"></div>
+        <div class="mc-row"><label>총 자원 B (자동연동)</label><input type="number" id="gc_b1" oninput="calcX0()" placeholder="Step 2 입력값"></div>
+        <div class="mc-result"><span class="mr-label">계산된 준거점 x₀</span><span class="mr-val" id="gc_x0_val">—</span></div>
+        <div class="mc-apply">
+          <button class="abn-a" onclick="applyX0('A')">🔵 A기관에 적용</button>
+          <button class="abn-b" onclick="applyX0('B')">🔴 B기관에 적용</button>
+        </div>
+        <div class="mc-note">데이터 없을 때: 총 자원 B의 50% 입력</div>
       </div>
-      <div class="guide-item gm">
-        <h5>🛡️ 최소한 받아야 할 양 (체면 마지노선 M) — "절대 양보 불가선"</h5>
-        <ul>
-          <li><strong>국회 예결위·상임위 회의록</strong>에서 해당 부처 장관의 공개 발언 검색</li>
-          <li>부처 <strong>공식 보도자료</strong>에서 "최소 ○○이 필요"로 제시한 수치</li>
-          <li><strong>언론 인터뷰</strong>에서 기관장이 마지노선으로 언급한 수치</li>
-          <li>공개 발언이 없다면: 준거점(x₀)의 <strong>70~80%</strong>를 추정값으로 사용</li>
-        </ul>
-        <div class="g-default">추정 공식: M ≈ x₀ × 0.75 (공개 자료 없을 때)</div>
+
+      <!-- ② 체면 마지노선 M -->
+      <div class="mini-calc">
+        <h5>② 최소한 받아야 할 양 — 마지노선 M</h5>
+        <div class="mc-formula">M = 준거점(x₀) × 조정계수<br><span style="color:#9ca3af;font-size:.76rem">참조: 국회 회의록 / 보도자료 / 장관 발언</span></div>
+        <div class="mc-row"><label>준거점 x₀</label><input type="number" id="gc_x0_m" oninput="calcM()" placeholder="① 계산값 자동 연동"></div>
+        <div class="mc-row">
+          <label>조정계수 (0.5~0.95)</label>
+          <input type="number" id="gc_factor" value="0.75" min="0.5" max="0.95" step="0.05" oninput="calcM()">
+        </div>
+        <div class="mc-note" style="margin-bottom:8px">조정계수 가이드: 강경한 입장 → 0.85 이상 / 온건한 입장 → 0.65 이하</div>
+        <hr class="mc-divider">
+        <div class="mc-row" style="font-size:.75rem;color:#6b7280">공개 발언에 명시된 수치가 있다면 아래에 직접 입력</div>
+        <div class="mc-row"><label>공개 발언 최솟값 (직접)</label><input type="number" id="gc_m_direct" oninput="useDirectM()" placeholder="있을 경우만 입력"></div>
+        <div class="mc-result"><span class="mr-label">계산된 마지노선 M</span><span class="mr-val" id="gc_m_val">—</span></div>
+        <div class="mc-apply">
+          <button class="abn-a" onclick="applyM('A')">🔵 A기관에 적용</button>
+          <button class="abn-b" onclick="applyM('B')">🔴 B기관에 적용</button>
+        </div>
       </div>
-      <div class="guide-item gw">
-        <h5>⚡ 협상 영향력 (권한 가중치 w) — "누가 더 힘이 있는가"</h5>
-        <ul>
-          <li><strong>AHP(계층분석법)</strong>: 관련 전문가 3~5인 쌍대비교로 산출 (권장)</li>
-          <li>간이 추정 기준: 장관급 부처(1.2~1.5) vs 청 단위(0.7~1.0)</li>
-          <li>담당 <strong>국정과제 수</strong>, <strong>소관 법령 수</strong>, 연간 예산 규모 비율 활용</li>
-          <li>과거 유사 갈등에서 해당 기관이 얼마나 관철했는지 이력 참조</li>
-        </ul>
-        <div class="g-default">대등한 부처끼리: 두 기관 모두 w = 1.0 설정</div>
+
+      <!-- ③ 협상 영향력 w -->
+      <div class="mini-calc">
+        <h5>③ 협상 영향력 — 권한 가중치 w</h5>
+        <div class="mc-formula">종합점수 = 정책(40%) + 예산(30%) + 법적권한(30%)<br>w = 0.5 + (종합점수 ÷ 10) × 2.0<br><span style="color:#9ca3af;font-size:.76rem">각 항목 0~10점 평가 후 가중 합산</span></div>
+        <div class="mc-row"><label>정책 영향력 (0~10)</label><input type="number" id="gc_p" min="0" max="10" step="0.5" oninput="calcW()" placeholder="국정과제 비중·주도 여부"></div>
+        <div class="mc-row"><label>예산 규모 (0~10)</label><input type="number" id="gc_b2" min="0" max="10" step="0.5" oninput="calcW()" placeholder="타 기관 대비 상대적 크기"></div>
+        <div class="mc-row"><label>법적 권한 범위 (0~10)</label><input type="number" id="gc_l" min="0" max="10" step="0.5" oninput="calcW()" placeholder="소관 법령·인허가 건수"></div>
+        <div class="mc-note" style="margin-bottom:8px">참고 기준: 장관급 부처 = 7~9점 / 청 단위 = 4~6점 / 위원회 = 3~5점</div>
+        <div class="mc-result"><span class="mr-label">계산된 가중치 w</span><span class="mr-val" id="gc_w_val">—</span></div>
+        <div class="mc-apply">
+          <button class="abn-a" onclick="applyW('A')">🔵 A기관에 적용</button>
+          <button class="abn-b" onclick="applyW('B')">🔴 B기관에 적용</button>
+        </div>
+        <div class="mc-note">대등한 부처끼리: 양쪽 모두 5점씩 입력 → w = 1.5 (동일 적용)</div>
       </div>
-      <div class="guide-item gd">
-        <h5>💥 결렬 시 피해 (결렬점 d) — "협상이 완전히 깨지면?"</h5>
-        <ul>
-          <li><strong>BATNA 분석</strong>: 협상 실패 시 각 기관이 취할 수 있는 최선 대안의 비용</li>
-          <li>결렬 시 예상 경로: 행정소송·감사 청구·국무회의 상정·언론 공개 등</li>
-          <li>과거 부처 간 갈등 사례에서 결렬 후 실제 발생한 손실 참조</li>
-          <li>인터뷰 조사: 해당 부처 담당자에게 "결렬되면 어떻게 되나요?" 직접 확인</li>
-        </ul>
-        <div class="g-default">추정 범위: 총 자원의 5~15% 수준에서 설정</div>
+
+      <!-- ④ 결렬점 d -->
+      <div class="mini-calc">
+        <h5>④ 결렬 시 피해 — 결렬점 d</h5>
+        <div class="mc-formula">d = (손실 비용 합계) × 결렬 발생 확률(%)<br><span style="color:#9ca3af;font-size:.76rem">BATNA 분석: 협상 실패 시 최선 대안의 비용</span></div>
+        <div class="mc-row"><label>행정소송·감사 비용 추정</label><input type="number" id="gc_d1" oninput="calcD()" placeholder="예: 행정소송 진행 비용"></div>
+        <div class="mc-row"><label>업무 차질·지연 손실</label><input type="number" id="gc_d2" oninput="calcD()" placeholder="예: 사업 지연으로 인한 손실"></div>
+        <div class="mc-row"><label>결렬 발생 확률 (%)</label><input type="number" id="gc_dp" value="50" min="1" max="100" oninput="calcD()" placeholder="0~100"></div>
+        <hr class="mc-divider">
+        <div class="mc-row" style="align-items:center">
+          <label style="width:auto;margin-right:6px;font-size:.76rem;color:#6b7280">간편 추정: 총 자원의</label>
+          <input type="number" id="gc_dpct" value="10" min="1" max="50" style="width:56px;border:1.5px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:.85rem;outline:none" oninput="calcDPct()">
+          <span style="font-size:.76rem;color:#6b7280;margin-left:4px">% 적용</span>
+        </div>
+        <div class="mc-result"><span class="mr-label">계산된 결렬점 d</span><span class="mr-val" id="gc_d_val">—</span></div>
+        <div class="mc-apply">
+          <button class="abn-a" onclick="applyD('A')">🔵 A기관에 적용</button>
+          <button class="abn-b" onclick="applyD('B')">🔴 B기관에 적용</button>
+        </div>
+        <div class="mc-note">피해 데이터 없을 때: 총 자원의 5~15% 범위로 설정</div>
       </div>
+
     </div>
   </div>
 </details>
@@ -453,6 +506,71 @@ async function run(){
   }catch(e){alert('서버 오류: '+e.message);}
   finally{btn.disabled=false; btn.textContent='🔍 합의안 찾기';}
 }
+
+// ── 파라미터 추정 계산기 ────────────────────────────────────
+const GC={x0:null, m:null, w:null, d:null};
+
+function calcX0(){
+  const a=parseFloat(document.getElementById('gc_a1').value);
+  const t=parseFloat(document.getElementById('gc_t1').value);
+  const b=parseFloat(document.getElementById('gc_b1').value)||parseFloat(SELS['trSel']?.getValue())||100;
+  if(isNaN(a)||isNaN(t)||t<=0){document.getElementById('gc_x0_val').textContent='—';GC.x0=null;return;}
+  const v=Math.round((a/t)*b*10)/10;
+  GC.x0=v; document.getElementById('gc_x0_val').textContent=v;
+  document.getElementById('gc_x0_m').value=v; calcM();
+}
+
+function calcM(){
+  const direct=parseFloat(document.getElementById('gc_m_direct').value);
+  if(!isNaN(direct)&&direct>0){GC.m=direct;document.getElementById('gc_m_val').textContent=direct;return;}
+  const x=parseFloat(document.getElementById('gc_x0_m').value);
+  const f=parseFloat(document.getElementById('gc_factor').value)||0.75;
+  if(isNaN(x)){document.getElementById('gc_m_val').textContent='—';GC.m=null;return;}
+  const v=Math.round(x*f*10)/10; GC.m=v;
+  document.getElementById('gc_m_val').textContent=v;
+}
+
+function useDirectM(){
+  const v=parseFloat(document.getElementById('gc_m_direct').value);
+  if(!isNaN(v)&&v>0){GC.m=v;document.getElementById('gc_m_val').textContent=v;}
+  else calcM();
+}
+
+function calcW(){
+  const p=parseFloat(document.getElementById('gc_p').value)||0;
+  const b=parseFloat(document.getElementById('gc_b2').value)||0;
+  const l=parseFloat(document.getElementById('gc_l').value)||0;
+  const score=p*0.4+b*0.3+l*0.3;
+  const v=Math.round((0.5+(score/10)*2.0)*100)/100;
+  GC.w=v; document.getElementById('gc_w_val').textContent=v;
+}
+
+function calcD(){
+  const d1=parseFloat(document.getElementById('gc_d1').value)||0;
+  const d2=parseFloat(document.getElementById('gc_d2').value)||0;
+  const p=parseFloat(document.getElementById('gc_dp').value)||50;
+  const v=Math.round((d1+d2)*(p/100)*10)/10;
+  GC.d=v; document.getElementById('gc_d_val').textContent=v;
+}
+
+function calcDPct(){
+  const pct=parseFloat(document.getElementById('gc_dpct').value)||10;
+  const B=parseFloat(SELS['trSel']?.getValue())||100;
+  const v=Math.round(B*pct/100*10)/10;
+  GC.d=v; document.getElementById('gc_d_val').textContent=v;
+}
+
+function snapToNearest(sel,value){
+  if(!sel||value==null) return;
+  let closest=sel.opts[0], minDiff=Math.abs(parseFloat(sel.opts[0].v)-value);
+  sel.opts.forEach(o=>{const diff=Math.abs(parseFloat(o.v)-value);if(diff<minDiff){minDiff=diff;closest=o;}});
+  sel._select(closest);
+}
+
+function applyX0(ab){snapToNearest(SELS[ab==='A'?'ax0Sel':'bx0Sel'],GC.x0);}
+function applyM(ab){snapToNearest(SELS[ab==='A'?'aMSel':'bMSel'],GC.m);}
+function applyW(ab){snapToNearest(SELS[ab==='A'?'awSel':'bwSel'],GC.w);}
+function applyD(ab){snapToNearest(SELS[ab==='A'?'adSel':'bdSel'],GC.d);}
 
 // ── 결과 표시 ────────────────────────────────────────────────────
 function show(d,p){
