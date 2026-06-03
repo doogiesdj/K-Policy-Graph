@@ -115,12 +115,31 @@ details[open] summary::before{transform:rotate(90deg)}
 .param-table .val-a{color:#2563eb;font-weight:700;font-family:monospace}
 .param-table .val-b{color:#dc2626;font-weight:700;font-family:monospace}
 .param-table .result-row td{background:#f0fdf4;font-weight:700;border-top:2px solid #86efac}
-/* 최적화 요약 */
-.optim-box{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media(max-width:560px){.optim-box{grid-template-columns:1fr}}
-.optim-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
-.optim-card .ok{font-size:.74rem;color:#6b7280;margin-bottom:4px}
-.optim-card .ov{font-size:.95rem;font-weight:700;color:#1e3a5f;font-family:monospace}
+/* 상황 설명 텍스트에어리어 */
+.situation-area{width:100%;border:2px solid #e5e7eb;border-radius:9px;padding:12px 14px;font-size:.93rem;font-family:inherit;color:#1f2937;resize:vertical;min-height:90px;outline:none;transition:border-color .2s;line-height:1.6}
+.situation-area:focus{border-color:#3b82f6}
+.situation-area::placeholder{color:#9ca3af}
+/* 입력 가이드 */
+.guide-details{background:#fff;border:1px solid #e0f2fe;border-radius:12px;margin-bottom:18px;overflow:hidden}
+.guide-details summary{padding:14px 20px;cursor:pointer;font-size:.88rem;font-weight:700;color:#0369a1;background:#f0f9ff;list-style:none;display:flex;align-items:center;gap:8px}
+.guide-details summary::-webkit-details-marker{display:none}
+.guide-details summary::before{content:"▶";font-size:.68rem;transition:transform .2s;flex-shrink:0}
+.guide-details[open] summary::before{transform:rotate(90deg)}
+.guide-body{padding:20px;border-top:1px solid #e0f2fe}
+.guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:600px){.guide-grid{grid-template-columns:1fr}}
+.guide-item{background:#f8fafc;border-radius:10px;padding:14px 16px;border-left:3px solid #3b82f6}
+.guide-item.gm{border-left-color:#7c3aed}
+.guide-item.gw{border-left-color:#059669}
+.guide-item.gd{border-left-color:#d97706}
+.guide-item h5{font-size:.82rem;font-weight:800;color:#1e3a5f;margin-bottom:8px}
+.guide-item ul{list-style:none;padding:0}
+.guide-item li{font-size:.78rem;color:#374151;line-height:1.6;padding:2px 0;padding-left:14px;position:relative}
+.guide-item li::before{content:"›";position:absolute;left:0;color:#6b7280}
+.guide-item .g-default{margin-top:8px;padding:6px 10px;background:#fff;border-radius:6px;font-size:.75rem;color:#7c3aed;font-weight:600;border:1px solid #e9d5ff}
+/* 상황 설명 결과 표시 */
+.situation-result{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:.88rem;color:#0369a1;line-height:1.6}
+.situation-result .sr-label{font-size:.72rem;font-weight:700;color:#0284c7;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
 </style>
 </head>
 <body>
@@ -142,6 +161,12 @@ details[open] summary::before{transform:rotate(90deg)}
     <div class="tc" data-type="규제 권한" data-mode="point" onclick="pickType(this)"><div class="ti">⚖️</div><div class="tn">규제 권한</div><div class="td">규제·심의 분쟁</div></div>
     <div class="tc" data-type="정책 우선순위" data-mode="point" onclick="pickType(this)"><div class="ti">📋</div><div class="tn">정책 우선순위</div><div class="td">정책 비중 분쟁</div></div>
   </div>
+
+  <div class="field" style="margin-top:20px">
+    <label class="fl">이 갈등 상황을 간략히 설명해 주세요</label>
+    <textarea id="situation" class="situation-area" placeholder="예시) 탄소중립 정책 추진 과정에서 환경부와 산업통상자원부 간 신규 탄소배출 규제 심의 권한이 중복됩니다. 두 부처 모두 소관 법령을 근거로 심의 주도권을 주장하고 있으며, 기업들은 이중 규제 부담을 호소하고 있습니다."></textarea>
+    <div class="fd">결과 보고서에 상황 맥락으로 포함됩니다. 두 기관명, 갈등 원인, 핵심 쟁점을 포함하면 좋습니다.</div>
+  </div>
 </div>
 
 <!-- 2. 총 자원 -->
@@ -149,6 +174,59 @@ details[open] summary::before{transform:rotate(90deg)}
   <div class="ch"><div class="cn">2</div><span class="ct" id="trTitle">두 기관이 나눌 총 예산은 얼마인가요?</span></div>
   <div class="field"><div id="trSel" class="csel"></div><div class="fd" id="trDesc">나눌 총 예산 금액을 선택하세요</div></div>
 </div>
+
+<!-- 3. 입력값 추정 가이드 -->
+<details class="guide-details">
+  <summary>📋 입력값을 어떻게 정해야 할지 모르겠다면 — 국조실 실무 추정 가이드</summary>
+  <div class="guide-body">
+    <p style="font-size:.82rem;color:#374151;margin-bottom:16px;line-height:1.6">
+      국무조정실이 두 부처의 정확한 내부 상황을 알기 어려운 경우, 아래 공개 자료와 추정 방법을 활용하세요.<br>
+      정확한 수치보다 <strong>상대적 크기 관계</strong>(A가 B보다 강한지, 피해가 큰지)가 결과에 더 중요합니다.
+    </p>
+    <div class="guide-grid">
+      <div class="guide-item">
+        <h5>📌 현재 배분액 (준거점 x₀) — "지금 갖고 있는 것"</h5>
+        <ul>
+          <li>예산: 기획재정부 <strong>예산 개요서</strong> 또는 <strong>세출예산 사업별 설명서</strong></li>
+          <li>관할권·권한: <strong>정부조직법 시행령</strong> 소관 업무 조항 비율</li>
+          <li>인력: <strong>행정안전부 정원령</strong> 기준 현재 정원표</li>
+          <li>규제: <strong>규제정보포털</strong>(better.go.kr) 소관 규제 건수 비율</li>
+        </ul>
+        <div class="g-default">데이터 없을 때: 총 자원의 50%를 기본값으로 설정</div>
+      </div>
+      <div class="guide-item gm">
+        <h5>🛡️ 최소한 받아야 할 양 (체면 마지노선 M) — "절대 양보 불가선"</h5>
+        <ul>
+          <li><strong>국회 예결위·상임위 회의록</strong>에서 해당 부처 장관의 공개 발언 검색</li>
+          <li>부처 <strong>공식 보도자료</strong>에서 "최소 ○○이 필요"로 제시한 수치</li>
+          <li><strong>언론 인터뷰</strong>에서 기관장이 마지노선으로 언급한 수치</li>
+          <li>공개 발언이 없다면: 준거점(x₀)의 <strong>70~80%</strong>를 추정값으로 사용</li>
+        </ul>
+        <div class="g-default">추정 공식: M ≈ x₀ × 0.75 (공개 자료 없을 때)</div>
+      </div>
+      <div class="guide-item gw">
+        <h5>⚡ 협상 영향력 (권한 가중치 w) — "누가 더 힘이 있는가"</h5>
+        <ul>
+          <li><strong>AHP(계층분석법)</strong>: 관련 전문가 3~5인 쌍대비교로 산출 (권장)</li>
+          <li>간이 추정 기준: 장관급 부처(1.2~1.5) vs 청 단위(0.7~1.0)</li>
+          <li>담당 <strong>국정과제 수</strong>, <strong>소관 법령 수</strong>, 연간 예산 규모 비율 활용</li>
+          <li>과거 유사 갈등에서 해당 기관이 얼마나 관철했는지 이력 참조</li>
+        </ul>
+        <div class="g-default">대등한 부처끼리: 두 기관 모두 w = 1.0 설정</div>
+      </div>
+      <div class="guide-item gd">
+        <h5>💥 결렬 시 피해 (결렬점 d) — "협상이 완전히 깨지면?"</h5>
+        <ul>
+          <li><strong>BATNA 분석</strong>: 협상 실패 시 각 기관이 취할 수 있는 최선 대안의 비용</li>
+          <li>결렬 시 예상 경로: 행정소송·감사 청구·국무회의 상정·언론 공개 등</li>
+          <li>과거 부처 간 갈등 사례에서 결렬 후 실제 발생한 손실 참조</li>
+          <li>인터뷰 조사: 해당 부처 담당자에게 "결렬되면 어떻게 되나요?" 직접 확인</li>
+        </ul>
+        <div class="g-default">추정 범위: 총 자원의 5~15% 수준에서 설정</div>
+      </div>
+    </div>
+  </div>
+</details>
 
 <!-- 3. 두 기관 -->
 <div class="card">
@@ -381,7 +459,9 @@ function show(d,p){
   const el=document.getElementById('results'); el.style.display='block'; el.scrollIntoView({behavior:'smooth',block:'start'});
   const sc={success:{cls:'rs-ok',msg:'✅  양측이 받아들일 수 있는 합의안을 찾았습니다.'},infeasible:{cls:'rs-no',msg:'❌  최솟값 합이 총 자원을 초과합니다. 마지노선을 낮추거나 총 자원을 늘려보세요.'},no_equilibrium:{cls:'rs-wn',msg:'⚠️  이 자원만으로는 합의점을 찾기 어렵습니다. 다른 조건을 함께 묶어 협상하는 것을 권장합니다.'}};
   const s=sc[d.status]||sc.success;
-  document.getElementById('statusMsg').innerHTML='<div class="rst '+s.cls+'">'+s.msg+'</div>';
+  const sit=document.getElementById('situation').value.trim();
+  const sitHtml=sit?`<div class="situation-result"><div class="sr-label">갈등 상황</div>${sit}</div>`:'';
+  document.getElementById('statusMsg').innerHTML=sitHtml+'<div class="rst '+s.cls+'">'+s.msg+'</div>';
   const tot=p.total_resource, aS=d.optimized_allocation.actor_A_share, bS=d.optimized_allocation.actor_B_share;
   const aN=p.actor_A.name, bN=p.actor_B.name, u=getUnit(cMode);
   const aP=(aS/tot*100).toFixed(1), bP=(bS/tot*100).toFixed(1);
