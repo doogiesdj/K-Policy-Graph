@@ -38,6 +38,7 @@ from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from scipy.optimize import minimize_scalar
 
@@ -82,7 +83,9 @@ class Actor(BaseModel):
     # 5. 후회 회피·승자의 저주 (Regret Aversion & Winner's Curse)
     bias_rho: float = Field(0.3, ge=0, description="[편향⑤] 후회 회피 ρ_i: 준거점 초과 이득에 대한 불안·의심 강도 (기본 0.3)")
 
-    # 6. 반응적 가치하락 → hostility_AB 로 상위 모델에서 처리
+    # 6. 시기심·반응적 가치하락 (Envy & Reactive Devaluation) — hostility_AB 와 결합
+    bias_beta: float = Field(0.5, ge=0, description="[편향⑥] 시기심·불평등 혐오 β_i: 상대방이 더 받을 때 느끼는 불쾌감 (기본 0.5)")
+
     # 7. 평판 위험·청중 효과 (Reputation Risk & Audience Effect)
     min_reputation_M: float = Field(..., ge=0, description="[편향⑦] 체면 마지노선 M_i: 이 값 미만 배분은 공개적 수용 불가")
 
@@ -485,18 +488,307 @@ app = FastAPI(
 )
 
 
-@app.get(
-    "/",
-    tags=["시스템"],
-    summary="서버 상태 확인",
-    description="서버가 정상 실행 중인지 확인합니다.",
-)
-def root() -> dict:
-    return {
-        "프로젝트": "HARMONIA / NASIS",
-        "조정_엔드포인트": "POST /api/v1/coordination/solve",
-        "사용설명서": "/docs",
+HARMONIA_HTML = """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HARMONIA — 부처 간 갈등 조정 엔진</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;color:#1a2332}
+header{background:#1e3a5f;color:#fff;padding:24px 32px}
+header h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+header p{font-size:.9rem;opacity:.75}
+main{max-width:980px;margin:28px auto;padding:0 16px 60px}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:22px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card h2{font-size:1rem;font-weight:700;color:#1e3a5f;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.badge{background:#1e3a5f;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+/* 갈등 유형 */
+.conflict-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.ccard{border:2px solid #e2e8f0;border-radius:10px;padding:14px 10px;text-align:center;cursor:pointer;transition:all .15s}
+.ccard:hover{border-color:#3b82f6;background:#eff6ff}
+.ccard.on{border-color:#1e3a5f;background:#dbeafe}
+.ccard .ico{font-size:1.8rem;margin-bottom:6px}
+.ccard .lbl{font-size:.82rem;font-weight:600;color:#374151}
+.ccard .sub{font-size:.72rem;color:#9ca3af;margin-top:3px}
+/* 폼 */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media(max-width:560px){.row2{grid-template-columns:1fr}}
+.actors{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:640px){.actors{grid-template-columns:1fr}}
+.apanel{border:2px solid #e2e8f0;border-radius:10px;padding:18px}
+.apanel.pa{border-color:#3b82f6}.apanel.pb{border-color:#ef4444}
+.apanel h3{font-size:.95rem;font-weight:700;margin-bottom:14px}
+.pa h3{color:#2563eb}.pb h3{color:#dc2626}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:.78rem;font-weight:600;color:#374151;margin-bottom:5px}
+.f .tip{font-size:.7rem;color:#9ca3af;margin-top:3px}
+.f input[type=text],.f input[type=number]{width:100%;border:1.5px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:.88rem;outline:none}
+.f input:focus{border-color:#3b82f6}
+.sf{margin-bottom:12px}
+.sf .sl{display:flex;justify-content:space-between;font-size:.78rem;font-weight:600;color:#374151;margin-bottom:5px}
+.sf .sl span{color:#6b7280;font-weight:400;font-size:.82rem}
+.sf input[type=range]{width:100%;accent-color:#1e3a5f}
+.sf .tip{font-size:.7rem;color:#9ca3af;margin-top:3px}
+/* 고급 설정 */
+details{margin-bottom:22px}
+details summary{cursor:pointer;font-size:.88rem;font-weight:600;color:#1e3a5f;padding:11px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;user-select:none}
+details summary::marker{display:none}
+details summary::before{content:"▶  "}
+details[open] summary::before{content:"▼  "}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;background:#fff}
+@media(max-width:640px){.bgrid{grid-template-columns:1fr}}
+/* 실행 버튼 */
+#runBtn{width:100%;padding:15px;background:#1e3a5f;color:#fff;border:none;border-radius:10px;font-size:1.05rem;font-weight:700;cursor:pointer;transition:background .2s;margin-bottom:22px}
+#runBtn:hover{background:#2d5a8e}
+#runBtn:disabled{background:#9ca3af;cursor:not-allowed}
+/* 결과 */
+#results{display:none}
+.sbadge{display:inline-block;padding:6px 14px;border-radius:20px;font-size:.85rem;font-weight:700;margin-bottom:18px}
+.ss{background:#d1fae5;color:#065f46}.si{background:#fee2e2;color:#991b1b}.sn{background:#fef3c7;color:#92400e}
+.bar-wrap{margin-bottom:20px}
+.bar-track{height:48px;border-radius:8px;overflow:hidden;display:flex;margin-bottom:8px}
+.ba{background:#2563eb;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.85rem;transition:width .7s ease;white-space:nowrap;overflow:hidden;padding:0 6px}
+.bb{background:#ef4444;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.85rem;transition:width .7s ease;white-space:nowrap;overflow:hidden;padding:0 6px}
+.bar-lbl{display:flex;justify-content:space-between;font-size:.83rem;color:#374151}
+.util-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.uc{border-radius:8px;padding:14px;text-align:center}
+.ua{background:#eff6ff;border:1px solid #bfdbfe}.ub{background:#fef2f2;border:1px solid #fecaca}
+.uc .sc{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+.ua .sc{color:#2563eb}.ub .sc{color:#dc2626}
+.uc .lc{font-size:.78rem;color:#6b7280}
+.note{background:#f8fafc;border-left:4px solid #1e3a5f;padding:14px 16px;border-radius:0 8px 8px 0;font-size:.88rem;line-height:1.7;color:#374151}
+</style>
+</head>
+<body>
+<header>
+  <h1>HARMONIA — 부처 간 갈등 조정 엔진</h1>
+  <p>심리적 편향 7종을 반영한 내시 바게닝 기반 갈등 조정 시스템</p>
+</header>
+<main>
+
+<!-- 1단계: 갈등 유형 -->
+<div class="card">
+  <h2><span class="badge">1</span> 어떤 갈등인가요?</h2>
+  <div class="conflict-grid" id="cg">
+    <div class="ccard on" data-type="예산 배분" data-unit="억 원" data-x0hint="현재 배분액 (억 원)" onclick="pick(this)">
+      <div class="ico">💰</div><div class="lbl">예산 배분</div><div class="sub">재원 배분 갈등</div>
+    </div>
+    <div class="ccard" data-type="사업 관할권" data-unit="점 (0~100)" data-x0hint="현재 담당 비중 (0~100)" onclick="pick(this)">
+      <div class="ico">🗺️</div><div class="lbl">사업 관할권</div><div class="sub">업무 영역 갈등</div>
+    </div>
+    <div class="ccard" data-type="인력 배분" data-unit="명" data-x0hint="현재 인원 수 (명)" onclick="pick(this)">
+      <div class="ico">👥</div><div class="lbl">인력 배분</div><div class="sub">정원·조직 갈등</div>
+    </div>
+    <div class="ccard" data-type="규제 권한" data-unit="점 (0~100)" data-x0hint="현재 권한 점수 (0~100)" onclick="pick(this)">
+      <div class="ico">⚖️</div><div class="lbl">규제 권한</div><div class="sub">심의·규제 갈등</div>
+    </div>
+    <div class="ccard" data-type="정책 우선순위" data-unit="점 (0~100)" data-x0hint="현재 우선순위 점수 (0~100)" onclick="pick(this)">
+      <div class="ico">📋</div><div class="lbl">정책 우선순위</div><div class="sub">정책 비중 갈등</div>
+    </div>
+  </div>
+</div>
+
+<!-- 2단계: 기본 설정 -->
+<div class="card">
+  <h2><span class="badge">2</span> 기본 정보 입력</h2>
+  <div class="row2">
+    <div class="f">
+      <label id="trLabel">총 자원 (억 원)</label>
+      <input type="number" id="tr" value="100" min="1">
+      <div class="tip">두 기관이 나눠 가질 자원의 총량</div>
+    </div>
+    <div class="sf">
+      <div class="sl">두 기관의 대립 강도 <span id="hv">0.2</span></div>
+      <input type="range" id="host" min="0" max="2" step="0.1" value="0.2" oninput="sv('hv',this.value)">
+      <div class="tip">0 = 중립 &nbsp;|&nbsp; 0.5 = 보통 갈등 &nbsp;|&nbsp; 1.0 이상 = 심각한 적대</div>
+    </div>
+  </div>
+
+  <div class="actors">
+    <div class="apanel pa">
+      <h3>🔵 A 기관</h3>
+      <div class="f"><label>기관 이름</label><input type="text" id="an" value="A부처"></div>
+      <div class="f">
+        <label id="ax0lbl">현재 점유량 (억 원)</label>
+        <input type="number" id="ax0" value="50">
+        <div class="tip" id="ax0tip">현재 배분액 (억 원)</div>
+      </div>
+      <div class="f">
+        <label>절대 양보 불가 최솟값</label>
+        <input type="number" id="aM" value="40">
+        <div class="tip">이 수치 이하는 체면상 공개적으로 수용 불가</div>
+      </div>
+      <div class="sf">
+        <div class="sl">협상력 <span id="awv">1.2</span></div>
+        <input type="range" id="aw" min="0.5" max="3" step="0.1" value="1.2" oninput="sv('awv',this.value)">
+        <div class="tip">상대보다 강하면 높게, 대등하면 1.0</div>
+      </div>
+      <div class="sf">
+        <div class="sl">협상 결렬 시 피해 <span id="adv">10</span></div>
+        <input type="range" id="ad" min="0" max="50" step="1" value="10" oninput="sv('adv',this.value)">
+        <div class="tip">협상이 완전히 깨졌을 때 이 기관이 입는 손해</div>
+      </div>
+    </div>
+
+    <div class="apanel pb">
+      <h3>🔴 B 기관</h3>
+      <div class="f"><label>기관 이름</label><input type="text" id="bn" value="B부처"></div>
+      <div class="f">
+        <label id="bx0lbl">현재 점유량 (억 원)</label>
+        <input type="number" id="bx0" value="50">
+        <div class="tip" id="bx0tip">현재 배분액 (억 원)</div>
+      </div>
+      <div class="f">
+        <label>절대 양보 불가 최솟값</label>
+        <input type="number" id="bM" value="35">
+        <div class="tip">이 수치 이하는 체면상 공개적으로 수용 불가</div>
+      </div>
+      <div class="sf">
+        <div class="sl">협상력 <span id="bwv">1.0</span></div>
+        <input type="range" id="bw" min="0.5" max="3" step="0.1" value="1.0" oninput="sv('bwv',this.value)">
+        <div class="tip">상대보다 강하면 높게, 대등하면 1.0</div>
+      </div>
+      <div class="sf">
+        <div class="sl">협상 결렬 시 피해 <span id="bdv">8</span></div>
+        <input type="range" id="bd" min="0" max="50" step="1" value="8" oninput="sv('bdv',this.value)">
+        <div class="tip">협상이 완전히 깨졌을 때 이 기관이 입는 손해</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3단계: 심리 편향 (선택) -->
+<details>
+  <summary>3단계 (선택사항) — 심리 편향 세부 조정 &nbsp; <small style="font-weight:400;color:#6b7280">기본값으로도 충분합니다</small></summary>
+  <div class="bgrid">
+    <div>
+      <div style="font-size:.85rem;font-weight:700;color:#2563eb;margin-bottom:12px">🔵 A 기관</div>
+      <div class="sf"><div class="sl">① 자기고양 (α) <span id="aalv">1.1</span></div><input type="range" id="aal" min="1" max="2" step="0.05" value="1.1" oninput="sv('aalv',this.value)"><div class="tip">자기 기여를 과대평가할수록 높게</div></div>
+      <div class="sf"><div class="sl">② 손실 회피 (λ) <span id="allv">2.2</span></div><input type="range" id="all" min="0" max="5" step="0.1" value="2.2" oninput="sv('allv',this.value)"><div class="tip">잃는 것을 극도로 싫어할수록 높게</div></div>
+      <div class="sf"><div class="sl">③ 제로섬 사고 (γ) <span id="aglv">0.3</span></div><input type="range" id="agl" min="0" max="1" step="0.05" value="0.3" oninput="sv('aglv',this.value)"><div class="tip">상대방 이득을 내 손실로 볼수록 높게</div></div>
+      <div class="sf"><div class="sl">④ 앵커링 (δ) <span id="adlv">0.5</span></div><input type="range" id="adl" min="0" max="2" step="0.05" value="0.5" oninput="sv('adlv',this.value)"><div class="tip">첫 요구안에 집착할수록 높게</div></div>
+      <div class="sf"><div class="sl">⑤ 후회 회피 (ρ) <span id="arlv">0.3</span></div><input type="range" id="arl" min="0" max="1" step="0.05" value="0.3" oninput="sv('arlv',this.value)"><div class="tip">이겨도 찝찝함을 느낄수록 높게</div></div>
+      <div class="sf"><div class="sl">⑥ 시기심 (β) <span id="ablv">0.5</span></div><input type="range" id="abl" min="0" max="2" step="0.05" value="0.5" oninput="sv('ablv',this.value)"><div class="tip">상대방이 더 받을 때 불쾌함이 클수록 높게</div></div>
+    </div>
+    <div>
+      <div style="font-size:.85rem;font-weight:700;color:#dc2626;margin-bottom:12px">🔴 B 기관</div>
+      <div class="sf"><div class="sl">① 자기고양 (α) <span id="balv">1.1</span></div><input type="range" id="bal" min="1" max="2" step="0.05" value="1.1" oninput="sv('balv',this.value)"><div class="tip">자기 기여를 과대평가할수록 높게</div></div>
+      <div class="sf"><div class="sl">② 손실 회피 (λ) <span id="bllv">2.0</span></div><input type="range" id="bll" min="0" max="5" step="0.1" value="2.0" oninput="sv('bllv',this.value)"><div class="tip">잃는 것을 극도로 싫어할수록 높게</div></div>
+      <div class="sf"><div class="sl">③ 제로섬 사고 (γ) <span id="bglv">0.4</span></div><input type="range" id="bgl" min="0" max="1" step="0.05" value="0.4" oninput="sv('bglv',this.value)"><div class="tip">상대방 이득을 내 손실로 볼수록 높게</div></div>
+      <div class="sf"><div class="sl">④ 앵커링 (δ) <span id="bdlv">0.6</span></div><input type="range" id="bdl" min="0" max="2" step="0.05" value="0.6" oninput="sv('bdlv',this.value)"><div class="tip">첫 요구안에 집착할수록 높게</div></div>
+      <div class="sf"><div class="sl">⑤ 후회 회피 (ρ) <span id="brlv">0.2</span></div><input type="range" id="brl" min="0" max="1" step="0.05" value="0.2" oninput="sv('brlv',this.value)"><div class="tip">이겨도 찝찝함을 느낄수록 높게</div></div>
+      <div class="sf"><div class="sl">⑥ 시기심 (β) <span id="bblv">0.6</span></div><input type="range" id="bbl" min="0" max="2" step="0.05" value="0.6" oninput="sv('bblv',this.value)"><div class="tip">상대방이 더 받을 때 불쾌함이 클수록 높게</div></div>
+    </div>
+  </div>
+</details>
+
+<!-- 실행 -->
+<button id="runBtn" onclick="run()">⚖️ 갈등 조정 실행</button>
+
+<!-- 결과 -->
+<div class="card" id="results">
+  <h2>조정 결과</h2>
+  <div id="sb"></div>
+  <div class="bar-wrap">
+    <div class="bar-track"><div class="ba" id="ba">A</div><div class="bb" id="bb">B</div></div>
+    <div class="bar-lbl"><span id="bla"></span><span id="blb"></span></div>
+  </div>
+  <div class="util-row">
+    <div class="uc ua"><div class="sc" id="ua">—</div><div class="lc" id="ula">A 기관 심리적 수용도</div></div>
+    <div class="uc ub"><div class="sc" id="ub">—</div><div class="lc" id="ulb">B 기관 심리적 수용도</div></div>
+  </div>
+  <div class="note" id="note"></div>
+</div>
+
+</main>
+<script>
+let CT={type:'예산 배분',unit:'억 원',x0hint:'현재 배분액 (억 원)'};
+function sv(id,v){document.getElementById(id).textContent=v}
+function pick(el){
+  document.querySelectorAll('.ccard').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  CT={type:el.dataset.type,unit:el.dataset.unit,x0hint:el.dataset.x0hint};
+  document.getElementById('trLabel').textContent='총 자원 ('+CT.unit+')';
+  document.getElementById('ax0lbl').textContent='현재 점유량 ('+CT.unit+')';
+  document.getElementById('bx0lbl').textContent='현재 점유량 ('+CT.unit+')';
+  document.getElementById('ax0tip').textContent=CT.x0hint;
+  document.getElementById('bx0tip').textContent=CT.x0hint;
+}
+async function run(){
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.textContent='계산 중...';
+  const p={
+    conflict_type:CT.type,
+    total_resource:+document.getElementById('tr').value,
+    hostility_AB:+document.getElementById('host').value,
+    actor_A:{
+      name:document.getElementById('an').value,
+      weight_w:+document.getElementById('aw').value,
+      disagreement_d:+document.getElementById('ad').value,
+      historical_x0:+document.getElementById('ax0').value,
+      min_reputation_M:+document.getElementById('aM').value,
+      bias_alpha:+document.getElementById('aal').value,
+      bias_lambda:+document.getElementById('all').value,
+      bias_gamma:+document.getElementById('agl').value,
+      bias_delta:+document.getElementById('adl').value,
+      bias_rho:+document.getElementById('arl').value,
+      bias_beta:+document.getElementById('abl').value,
+    },
+    actor_B:{
+      name:document.getElementById('bn').value,
+      weight_w:+document.getElementById('bw').value,
+      disagreement_d:+document.getElementById('bd').value,
+      historical_x0:+document.getElementById('bx0').value,
+      min_reputation_M:+document.getElementById('bM').value,
+      bias_alpha:+document.getElementById('bal').value,
+      bias_lambda:+document.getElementById('bll').value,
+      bias_gamma:+document.getElementById('bgl').value,
+      bias_delta:+document.getElementById('bdl').value,
+      bias_rho:+document.getElementById('brl').value,
+      bias_beta:+document.getElementById('bbl').value,
     }
+  };
+  try{
+    const r=await fetch('/api/v1/coordination/solve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    show(await r.json(),p);
+  }catch(e){alert('오류: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='⚖️ 갈등 조정 실행';}
+}
+function show(d,p){
+  const el=document.getElementById('results');
+  el.style.display='block';
+  el.scrollIntoView({behavior:'smooth'});
+  const sm={success:{c:'ss',t:'✅ 조정안 도출 성공'},infeasible:{c:'si',t:'❌ 조정 불가 — 추가 자원 협상 필요'},no_equilibrium:{c:'sn',t:'⚠️ 단일 자원으로 균형 불가 — 2단계 중재 필요'}};
+  const s=sm[d.status]||{c:'',t:d.status};
+  document.getElementById('sb').innerHTML=`<span class="sbadge ${s.c}">${s.t}</span>`;
+  const tot=p.total_resource, aS=d.optimized_allocation.actor_A_share, bS=d.optimized_allocation.actor_B_share;
+  const aN=p.actor_A.name, bN=p.actor_B.name, u=CT.unit;
+  const ap=(aS/tot*100).toFixed(1), bp=(bS/tot*100).toFixed(1);
+  document.getElementById('ba').style.width=ap+'%'; document.getElementById('ba').textContent=`${aN}  ${aS} ${u}`;
+  document.getElementById('bb').style.width=bp+'%'; document.getElementById('bb').textContent=`${bN}  ${bS} ${u}`;
+  document.getElementById('bla').textContent=`${aN}: ${aS} ${u} (${ap}%)`;
+  document.getElementById('blb').textContent=`${bN}: ${bS} ${u} (${bp}%)`;
+  document.getElementById('ua').textContent=d.psychological_satisfaction.actor_A_utility;
+  document.getElementById('ub').textContent=d.psychological_satisfaction.actor_B_utility;
+  document.getElementById('ula').textContent=aN+' 심리적 수용도';
+  document.getElementById('ulb').textContent=bN+' 심리적 수용도';
+  document.getElementById('note').textContent=d.coordination_note;
+}
+</script>
+</body>
+</html>"""
+
+
+@app.get("/", response_class=HTMLResponse, tags=["시스템"], summary="조정 엔진 UI", include_in_schema=False)
+def root() -> HTMLResponse:
+    return HTMLResponse(content=HARMONIA_HTML)
+
+
+@app.get("/health", tags=["시스템"], summary="서버 상태 확인")
+def health() -> dict:
+    return {"status": "ok", "project": "HARMONIA", "api": "/api/v1/coordination/solve"}
 
 
 @app.post(
