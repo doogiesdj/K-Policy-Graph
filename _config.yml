@@ -1,0 +1,6 @@
+title: "Project HARMONIA"
+description: "다부처 갈등 조정 — 심리적 수정 내시 바게닝 프로토타입"
+theme: cayman
+
+plugins:
+  - jekyll-relative-links
